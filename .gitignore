@@ -1,0 +1,15 @@
+﻿# Python artifacts
+__pycache__/
+*.py[cod]
+*.class
+venv/
+.env
+
+# Session files & temporary logs
+*.session
+*.session-journal
+*.log
+/tmp/
+
+# Tunnel and system files
+.cloudflared/

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TG Account Automation Dashboard</title>
+    <style>
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background: #f0f2f5; padding: 25px; margin: 0; color: #1e293b; }
+        .container { max-width: 1100px; margin: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .full-width { grid-column: span 2; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+        h2 { margin-top: 0; font-size: 18px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
+        label { font-size: 13px; font-weight: 600; color: #64748b; margin-top: 10px; display: block; }
+        input, textarea, button { width: 100%; margin: 6px 0 12px 0; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
+        button { background: #0284c7; color: white; border: none; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        button:hover { background: #0369a1; }
+        .promo-block { background: #f8fafc; padding: 14px; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 12px; }
+        .radio-group { margin-top: 8px; }
+        .radio-group label { display: inline-flex; align-items: center; gap: 6px; margin-right: 15px; margin-top: 4px; cursor: pointer; font-size: 14px; color: #334155; }
+        .radio-group input { width: auto; margin: 0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 1. Account Login -->
+    <div class="card">
+        <h2>1. Add Telegram Account</h2>
+        <input type="text" id="phone" placeholder="Phone Number (+91...)">
+        <input type="number" id="api_id" placeholder="API ID">
+        <input type="text" id="api_hash" placeholder="API Hash">
+        <button onclick="sendOtp()">Send OTP</button>
+
+        <div id="otpSection" style="display: none; border-top: 1px dashed #cbd5e1; padding-top: 10px; margin-top: 10px;">
+            <input type="text" id="otp" placeholder="Enter OTP Code">
+            <input type="password" id="password" placeholder="2FA Password (if enabled)">
+            <button onclick="verifyLogin()">Authorize & Save Session</button>
+        </div>
+    </div>
+
+    <!-- 2. Controls & IST Sleep -->
+    <div class="card">
+        <h2>2. Timing & IST Sleep Controls</h2>
+        <form onsubmit="saveSettings(event)">
+            <label>Message Delay (Active Time in Seconds):</label>
+            <input type="number" name="active_time" value="{{ settings.active_time_sec }}">
+            
+            <label>Cycle Delay (Rest Time in Seconds):</label>
+            <input type="number" name="rest_time" value="{{ settings.rest_time_sec }}">
+            
+            <label>Global Sleep Start (IST):</label>
+            <input type="time" name="sleep_start" value="{{ settings.sleep_start_ist }}">
+            
+            <label>Global Sleep End (IST):</label>
+            <input type="time" name="sleep_end" value="{{ settings.sleep_end_ist }}">
+            
+            <button type="submit">Save Controls</button>
+        </form>
+    </div>
+
+    <!-- 3. Promo Messages & Dynamic Slot Mapping -->
+    <div class="card full-width">
+        <h2>3. Promo Messages & Account Slot Assignment</h2>
+        
+        <!-- Add Promo Form -->
+        <form onsubmit="addPromo(event)" style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <input type="text" name="title" placeholder="Promo Title (e.g. Offer A)" required style="flex: 1;">
+            <textarea name="content" placeholder="Enter message text..." required style="flex: 2; height: 42px;"></textarea>
+            <button type="submit" style="flex: 0.5;">Add Slot</button>
+        </form>
+
+        <!-- Dynamic Promo Cards -->
+        {% for promo in promos %}
+        <div class="promo-block">
+            <strong>{{ promo.title }}</strong>
+            <p style="white-space: pre-wrap; margin: 8px 0; color: #475569; font-size: 14px;">{{ promo.content }}</p>
+            <div class="radio-group">
+                <small><strong>Assign Account:</strong></small><br>
+                <label>
+                    <input type="radio" name="promo_acc_{{ promo.id }}" value="" 
+                           onchange="assignAccount({{ promo.id }}, null)" 
+                           {% if not promo.assigned_account_id %}checked{% endif %}> None
+                </label>
+                {% for acc in accounts %}
+                <label>
+                    <input type="radio" name="promo_acc_{{ promo.id }}" value="{{ acc.id }}" 
+                           onchange="assignAccount({{ promo.id }}, {{ acc.id }})"
+                           {% if promo.assigned_account_id == acc.id %}checked{% endif %}>
+                    {{ acc.phone }}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+async function sendOtp() {
+    const fd = new FormData();
+    fd.append('phone', document.getElementById('phone').value);
+    fd.append('api_id', document.getElementById('api_id').value);
+    fd.append('api_hash', document.getElementById('api_hash').value);
+    
+    const res = await fetch('/auth/send-otp', { method: 'POST', body: fd });
+    if (res.ok) {
+        document.getElementById('otpSection').style.display = 'block';
+        alert('OTP sent to your Telegram account!');
+    } else {
+        alert('Failed to send OTP. Check API ID and API Hash.');
+    }
+}
+
+async function verifyLogin() {
+    const fd = new FormData();
+    fd.append('phone', document.getElementById('phone').value);
+    fd.append('code', document.getElementById('otp').value);
+    fd.append('password', document.getElementById('password').value);
+    
+    const res = await fetch('/auth/verify-login', { method: 'POST', body: fd });
+    const data = await res.json();
+    alert(data.message || data.error);
+    if (res.ok) location.reload();
+}
+
+async function addPromo(e) {
+    e.preventDefault();
+    await fetch('/promo/add', { method: 'POST', body: new FormData(e.target) });
+    location.reload();
+}
+
+async function assignAccount(promoId, accId) {
+    const fd = new FormData();
+    fd.append('promo_id', promoId);
+    if (accId) fd.append('account_id', accId);
+    await fetch('/promo/assign', { method: 'POST', body: fd });
+    location.reload();
+}
+
+async function saveSettings(e) {
+    e.preventDefault();
+    await fetch('/settings/update', { method: 'POST', body: new FormData(e.target) });
+    alert('Settings saved successfully!');
+}
+</script>
+</body>
+</html>
