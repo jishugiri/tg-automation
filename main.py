@@ -1,127 +1,119 @@
+﻿import os
+import secrets
 import pymysql
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, Request, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
-from telethon import TelegramClient
-from telethon.sessions import StringSession
 
 app = FastAPI()
-templates = Jinja2Templates(directory="templates")
+security = HTTPBasic()
 
-temp_sessions = {}
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
-# --- Set Your MySQL Credentials Here ---
+AUTH_USERNAME = "avijit"
+AUTH_PASSWORD = "721517"
+
 DB_CONFIG = {
     "host": "localhost",
     "user": "root",
-    "password": "Cse@2021",  # <-- Change this to your MySQL password
+    "password": "your_mysql_password",
     "database": "tg_dashboard",
+    "charset": "utf8mb4",
     "cursorclass": pymysql.cursors.DictCursor
 }
 
 def get_db():
-    return pymysql.connect(**DB_CONFIG)
+    try:
+        return pymysql.connect(**DB_CONFIG)
+    except Exception as e:
+        print(f"[DB Warning] Could not connect to local MySQL: {e}")
+        return None
+
+def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = secrets.compare_digest(credentials.username, AUTH_USERNAME)
+    correct_password = secrets.compare_digest(credentials.password, AUTH_PASSWORD)
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    db = get_db()
-    with db.cursor() as cursor:
-        cursor.execute("SELECT * FROM accounts")
-        accounts = cursor.fetchall()
-        cursor.execute("SELECT * FROM promo_messages")
-        promos = cursor.fetchall()
-        cursor.execute("SELECT * FROM settings WHERE id = 1")
-        settings = cursor.fetchone()
-    db.close()
-    
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "accounts": accounts,
-        "promos": promos,
-        "settings": settings
-    })
-
-@app.post("/auth/send-otp")
-async def send_otp(phone: str = Form(...), api_id: int = Form(...), api_hash: str = Form(...)):
-    client = TelegramClient(StringSession(), api_id, api_hash)
-    await client.connect()
-    sent = await client.send_code_request(phone)
-    
-    temp_sessions[phone] = {
-        "client": client,
-        "phone_code_hash": sent.phone_code_hash,
-        "api_id": api_id,
-        "api_hash": api_hash
+@app.get("/control", response_class=HTMLResponse)
+async def control_console(request: Request, user: str = Depends(authenticate)):
+    accounts, promos, settings = [], [], {
+        "active_time_sec": 1800,
+        "rest_time_sec": 180,
+        "sleep_start_ist": "23:00:00",
+        "sleep_end_ist": "07:00:00"
     }
-    return {"status": "otp_sent"}
-
-@app.post("/auth/verify-login")
-async def verify_login(phone: str = Form(...), code: str = Form(...), password: str = Form(None)):
-    if phone not in temp_sessions:
-        return JSONResponse(status_code=400, content={"error": "Session expired. Try again."})
-    
-    session_data = temp_sessions[phone]
-    client: TelegramClient = session_data["client"]
-    
-    try:
-        if password:
-            await client.sign_in(phone=phone, code=code, password=password)
-        else:
-            await client.sign_in(phone=phone, code=code, phone_code_hash=session_data["phone_code_hash"])
-        
-        session_string = client.session.save()
-        
-        db = get_db()
-        with db.cursor() as cursor:
-            cursor.execute(
-                """INSERT INTO accounts (phone, api_id, api_hash, session_string)
-                   VALUES (%s, %s, %s, %s)
-                   ON DUPLICATE KEY UPDATE session_string=%s, status='active'""",
-                (phone, session_data["api_id"], session_data["api_hash"], session_string, session_string)
-            )
-            db.commit()
-        db.close()
-        
-        await client.disconnect()
-        del temp_sessions[phone]
-        return {"status": "success", "message": "Account successfully connected!"}
-    except Exception as e:
-        return JSONResponse(status_code=400, content={"error": str(e)})
-
-@app.post("/promo/add")
-async def add_promo(title: str = Form(...), content: str = Form(...)):
     db = get_db()
-    with db.cursor() as cursor:
-        cursor.execute("INSERT INTO promo_messages (title, content) VALUES (%s, %s)", (title, content))
-        db.commit()
-    db.close()
-    return {"status": "success"}
+    if db:
+        try:
+            with db.cursor() as cursor:
+                cursor.execute("SELECT * FROM accounts ORDER BY id ASC")
+                accounts = cursor.fetchall() or []
+                cursor.execute("SELECT * FROM promo_messages ORDER BY id DESC")
+                promos = cursor.fetchall() or []
+                for p in promos:
+                    cursor.execute("SELECT account_id FROM promo_account_map WHERE promo_id = %s", (p["id"],))
+                    p["assigned_account_ids"] = [row["account_id"] for row in cursor.fetchall()]
+                cursor.execute("SELECT * FROM settings WHERE id = 1")
+                db_settings = cursor.fetchone()
+                if db_settings:
+                    settings = db_settings
+            db.close()
+        except Exception as e:
+            print(f"Error fetching control data: {e}")
 
-@app.post("/promo/assign")
-async def assign_promo(promo_id: int = Form(...), account_id: int = Form(None)):
-    db = get_db()
-    with db.cursor() as cursor:
-        if account_id:
-            cursor.execute("UPDATE promo_messages SET assigned_account_id = NULL WHERE assigned_account_id = %s", (account_id,))
-        cursor.execute("UPDATE promo_messages SET assigned_account_id = %s WHERE id = %s", (account_id, promo_id))
-        db.commit()
-    db.close()
-    return {"status": "success"}
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"accounts": accounts, "promos": promos, "settings": settings}
+    )
 
-@app.post("/settings/update")
-async def update_settings(
-    active_time: int = Form(...),
-    rest_time: int = Form(...),
-    sleep_start: str = Form(...),
-    sleep_end: str = Form(...)
-):
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard_view(request: Request, user: str = Depends(authenticate)):
+    accounts, logs = [], []
     db = get_db()
-    with db.cursor() as cursor:
-        cursor.execute(
-            """UPDATE settings SET active_time_sec=%s, rest_time_sec=%s, 
-               sleep_start_ist=%s, sleep_end_ist=%s WHERE id=1""",
-            (active_time, rest_time, sleep_start, sleep_end)
-        )
-        db.commit()
-    db.close()
-    return {"status": "success"}
+    if db:
+        try:
+            with db.cursor() as cursor:
+                cursor.execute("SELECT * FROM accounts ORDER BY id ASC")
+                accounts = cursor.fetchall() or []
+                cursor.execute("SELECT * FROM activity_logs ORDER BY id DESC LIMIT 100")
+                logs = cursor.fetchall() or []
+            db.close()
+        except Exception as e:
+            print(f"Error fetching dashboard data: {e}")
+
+    # Fallback preview nodes for demo purposes if local DB is empty/disconnected
+    if not accounts:
+        accounts = [
+            {"id": 1, "phone": "+919876543210", "status": "active"},
+            {"id": 2, "phone": "+919812345678", "status": "active"}
+        ]
+
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context={"accounts": accounts, "logs": logs}
+    )
+
+@app.get("/api/logs")
+async def get_logs_api(user: str = Depends(authenticate)):
+    logs = []
+    db = get_db()
+    if db:
+        try:
+            with db.cursor() as cursor:
+                cursor.execute("SELECT * FROM activity_logs ORDER BY id DESC LIMIT 50")
+                logs = cursor.fetchall() or []
+            db.close()
+        except Exception as e:
+            pass
+    return {"logs": logs}
