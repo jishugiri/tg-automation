@@ -21,14 +21,14 @@ A resilient, scalable Telegram broadcast and rotation control platform built wit
 *Interactive management panel featuring engine delay parameters, OTP session onboarding, and active system node controls (Mute / Drop).*
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jishugiri/tg-automation/main/assets/control-preview.png" alt="Control Console Mobile View" width="380" />
+  <img src="./assets/control-preview.png" alt="Control Console Mobile View" width="380" />
 </p>
 
 ### 📊 Real-Time Dispatch Terminal
 *Live monitoring telemetry capturing broadcast logs, target groups, reference IDs, and execution states.*
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jishugiri/tg-automation/main/assets/dashboard-preview.png" alt="Live Terminal Stream" width="650" />
+  <img src="./assets/dashboard-preview.png" alt="Live Terminal Stream" width="650" />
 </p>
 
 ---
@@ -80,3 +80,5 @@ python -m uvicorn main:app --host 127.0.0.1 --port 8000
 
 - **Developer:** Jishu Giri
 - **Role:** Root Manager / System Admin
+
+
