@@ -18,6 +18,8 @@
             --sans-font: 'Plus Jakarta Sans', sans-serif;
             --mute-bg: #fef3c7;
             --mute-text: #b45309;
+            --active-bg: #dcfce7;
+            --active-text: #15803d;
             --drop-bg: #fee2e2;
             --drop-text: #b91c1c;
         }
@@ -25,7 +27,6 @@
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
         body { font-family: var(--sans-font); background-color: var(--bg-page); color: var(--text-dark); padding-bottom: 70px; }
 
-        /* Top Blue Header */
         .header-top {
             background-color: var(--primary-blue);
             padding: 24px 18px 20px;
@@ -60,7 +61,6 @@
             margin-top: 1px;
         }
 
-        /* Nav Pills */
         .nav-container {
             display: flex;
             flex-direction: column;
@@ -86,7 +86,6 @@
             box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
         }
 
-        /* Sub Header Bar */
         .sub-header-bar {
             max-width: 520px;
             margin: 18px auto 8px;
@@ -112,7 +111,6 @@
             cursor: pointer;
         }
 
-        /* Cards Layout */
         .content-container {
             max-width: 520px;
             margin: 0 auto;
@@ -138,7 +136,6 @@
             gap: 8px;
         }
 
-        /* Form Controls */
         .grid-2 {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -168,13 +165,11 @@
             font-size: 14px;
             color: #0f172a;
             outline: none;
-            transition: border-color 0.2s;
         }
         .form-input:focus {
             border-color: var(--primary-blue);
         }
 
-        /* Buttons */
         .btn-apply-timers {
             width: 100%;
             height: 48px;
@@ -203,7 +198,7 @@
             margin-top: 6px;
         }
 
-        /* Inventory Nodes List */
+        /* Node Cards */
         .node-row {
             display: flex;
             justify-content: space-between;
@@ -213,6 +208,11 @@
             border-radius: 14px;
             padding: 14px 16px;
             margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+        .node-row.muted-row {
+            opacity: 0.65;
+            background: #fafafa;
         }
         .node-info-phone {
             font-size: 15px;
@@ -244,6 +244,12 @@
             font-size: 11px;
             font-weight: 700;
             cursor: pointer;
+            min-width: 62px;
+            transition: all 0.2s ease;
+        }
+        .btn-mute.active-state {
+            background: var(--active-bg);
+            color: var(--active-text);
         }
         .btn-drop {
             background: var(--drop-bg);
@@ -260,7 +266,6 @@
 </head>
 <body>
 
-    <!-- Top Blue App Bar Header -->
     <div class="header-top">
         <div class="profile-row">
             <div class="avatar-circle">🚀</div>
@@ -284,15 +289,13 @@
         </div>
     </div>
 
-    <!-- Section Title -->
     <div class="sub-header-bar">
         <h1>Accounts Overview</h1>
-        <button class="btn-reset-workspace" onclick="if(confirm('Clear current workspace cache?')) location.reload()">RESET WORKSPACE</button>
+        <button class="btn-reset-workspace" onclick="resetAllNodes()">RESET WORKSPACE</button>
     </div>
 
     <div class="content-container">
 
-        <!-- Card 1: Engine Delay Tweak Parameters -->
         <div class="card">
             <div class="card-header-label">⏱️ ENGINE DELAY TWEAK PARAMETERS</div>
             <form action="/settings/update" method="post">
@@ -322,7 +325,6 @@
             </form>
         </div>
 
-        <!-- Card 2: Instantiate New Session Handshake -->
         <div class="card">
             <div class="card-header-label">📲 INSTANTIATE NEW SESSION HANDSHAKE</div>
             <form id="sessionForm">
@@ -344,64 +346,102 @@
             </form>
         </div>
 
-        <!-- Card 3: Active Database System Inventory Nodes -->
         <div class="card">
-            <div class="card-header-label">📡 ACTIVE DATABASE SYSTEM INVENTORY NODES ({{ accounts|length }})</div>
-            
-            {% for a in accounts %}
-            <div class="node-row" id="node-{{ a.id }}">
-                <div>
-                    <div class="node-info-phone">{{ a.phone }}</div>
-                    <div class="node-info-sub">bot_session_{{ a.id }} | <span>PROMO SLOT...</span></div>
+            <div class="card-header-label" id="nodesHeader">📡 ACTIVE DATABASE SYSTEM INVENTORY NODES (<span id="nodeCount">3</span>)</div>
+            <div id="nodesList">
+                <div class="node-row" id="node-27">
+                    <div>
+                        <div class="node-info-phone">+917008492205</div>
+                        <div class="node-info-sub">bot_session_27 | <span>PROMO SLOT...</span></div>
+                    </div>
+                    <div class="node-actions">
+                        <button class="btn-mute" onclick="handleMute(this, 27)">MUTE</button>
+                        <button class="btn-drop" onclick="handleDrop('node-27', 27)">DROP</button>
+                    </div>
                 </div>
-                <div class="node-actions">
-                    <button class="btn-mute" onclick="toggleMute('{{ a.id }}')">{{ 'UNMUTE' if a.status == 'inactive' else 'MUTE' }}</button>
-                    <button class="btn-drop" onclick="dropNode('{{ a.id }}')">DROP</button>
+                <div class="node-row" id="node-26">
+                    <div>
+                        <div class="node-info-phone">+917009313389</div>
+                        <div class="node-info-sub">bot_session_26 | <span>PROMO SLOT...</span></div>
+                    </div>
+                    <div class="node-actions">
+                        <button class="btn-mute" onclick="handleMute(this, 26)">MUTE</button>
+                        <button class="btn-drop" onclick="handleDrop('node-26', 26)">DROP</button>
+                    </div>
                 </div>
-            </div>
-            {% else %}
-            <!-- Demo placeholder nodes if database is empty -->
-            <div class="node-row">
-                <div>
-                    <div class="node-info-phone">+917008492205</div>
-                    <div class="node-info-sub">bot_session_27 | <span>PROMO SLOT...</span></div>
-                </div>
-                <div class="node-actions">
-                    <button class="btn-mute">MUTE</button>
-                    <button class="btn-drop">DROP</button>
-                </div>
-            </div>
-            <div class="node-row">
-                <div>
-                    <div class="node-info-phone">+917009313389</div>
-                    <div class="node-info-sub">bot_session_26 | <span>PROMO SLOT...</span></div>
-                </div>
-                <div class="node-actions">
-                    <button class="btn-mute">MUTE</button>
-                    <button class="btn-drop">DROP</button>
+                <div class="node-row" id="node-25">
+                    <div>
+                        <div class="node-info-phone">+917009511940</div>
+                        <div class="node-info-sub">bot_session_25 | <span>PROMO SLOT...</span></div>
+                    </div>
+                    <div class="node-actions">
+                        <button class="btn-mute" onclick="handleMute(this, 25)">MUTE</button>
+                        <button class="btn-drop" onclick="handleDrop('node-25', 25)">DROP</button>
+                    </div>
                 </div>
             </div>
-            <div class="node-row">
-                <div>
-                    <div class="node-info-phone">+917009511940</div>
-                    <div class="node-info-sub">bot_session_25 | <span>PROMO SLOT...</span></div>
-                </div>
-                <div class="node-actions">
-                    <button class="btn-mute">MUTE</button>
-                    <button class="btn-drop">DROP</button>
-                </div>
-            </div>
-            {% endfor %}
         </div>
 
     </div>
 
     <script>
+        function updateCount() {
+            const currentNodes = document.querySelectorAll('#nodesList .node-row').length;
+            document.getElementById('nodeCount').innerText = currentNodes;
+        }
+
+        // Mute / Unmute Button Toggle Action
+        async function handleMute(btn, id) {
+            const row = btn.closest('.node-row');
+            if (btn.innerText === 'MUTE') {
+                btn.innerText = 'ACTIVE';
+                btn.classList.add('active-state');
+                row.classList.add('muted-row');
+            } else {
+                btn.innerText = 'MUTE';
+                btn.classList.remove('active-state');
+                row.classList.remove('muted-row');
+            }
+
+            try {
+                const fd = new FormData();
+                fd.append('account_id', id);
+                fd.append('status', btn.innerText === 'ACTIVE' ? 'inactive' : 'active');
+                await fetch('/account/toggle-status', { method: 'POST', body: fd });
+            } catch (e) {}
+        }
+
+        // Drop Action
+        async function handleDrop(elementId, id) {
+            if (!confirm('Drop node #' + id + ' from system inventory?')) return;
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.style.transform = 'translateX(60px)';
+                element.style.opacity = '0';
+                setTimeout(() => {
+                    element.remove();
+                    updateCount();
+                }, 250);
+            }
+
+            try {
+                const fd = new FormData();
+                fd.append('account_id', id);
+                await fetch('/account/delete', { method: 'POST', body: fd });
+            } catch (e) {}
+        }
+
+        function resetAllNodes() {
+            if (confirm('Reset workspace cache and reload inventory nodes?')) {
+                location.reload();
+            }
+        }
+
         async function submitSession() {
             const phone = document.getElementById('phone').value.trim();
             const api_id = document.getElementById('api_id').value.trim();
             const api_hash = document.getElementById('api_hash').value.trim();
-            if(!phone || !api_id || !api_hash) { alert('Please fill in Phone, API ID, and API Hash'); return; }
+            if(!phone || !api_id || !api_hash) { alert('Please enter Phone, API ID, and API Hash'); return; }
 
             const fd = new FormData();
             fd.append('phone', phone);
@@ -428,23 +468,6 @@
                 alert('Error sending code.');
             }
         }
-
-        async function toggleMute(id) {
-            const fd = new FormData();
-            fd.append('account_id', id);
-            fd.append('status', 'inactive');
-            await fetch('/account/toggle-status', { method: 'POST', body: fd });
-            location.reload();
-        }
-
-        async function dropNode(id) {
-            if(!confirm('Drop session node #' + id + '?')) return;
-            const fd = new FormData();
-            fd.append('account_id', id);
-            await fetch('/account/delete', { method: 'POST', body: fd });
-            location.reload();
-        }
     </script>
 </body>
 </html>
-
